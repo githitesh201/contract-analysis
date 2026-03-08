@@ -1,34 +1,240 @@
-import redis from "../config/redis";
 import { getDocument } from "pdfjs-dist";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const AI_MODEL = "gemini-pro";
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-const aiModel = genAI.getGenerativeModel({ model: AI_MODEL });
+export const AI_MODEL = "gemini-2.5-flash";
 
-export const extractTextFromPDF = async (fileKey: string) => {
+const getGeminiModel = () => {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key || key.trim().length < 12 || key.startsWith("local-")) {
+    return null;
+  }
+
+  const genAI = new GoogleGenerativeAI(key);
+  return genAI.getGenerativeModel({
+    model: AI_MODEL,
+    generationConfig: {
+      responseMimeType: "application/json",
+    },
+  });
+};
+
+const aiModel = getGeminiModel();
+
+const inferContractTypeFromText = (text: string): string => {
+  const normalized = text.toLowerCase();
+
+  if (normalized.includes("non-disclosure") || normalized.includes("nda")) {
+    return "Non-Disclosure Agreement";
+  }
+  if (normalized.includes("employment") || normalized.includes("employee")) {
+    return "Employment";
+  }
+  if (normalized.includes("lease") || normalized.includes("landlord")) {
+    return "Lease";
+  }
+  if (normalized.includes("purchase") || normalized.includes("buyer")) {
+    return "Sales";
+  }
+  if (normalized.includes("service") || normalized.includes("scope of work")) {
+    return "Service Agreement";
+  }
+
+  return "General Contract";
+};
+
+type Tier = "free" | "premium";
+
+const buildFallbackAnalysis = (contractType: string, tier: Tier) => {
+  const base = {
+    risks: [
+      {
+        risk: "Ambiguous obligations",
+        explanation:
+          "Some duties may be broadly defined and could create interpretation disputes.",
+        severity: "medium" as const,
+      },
+      {
+        risk: "Termination imbalance",
+        explanation:
+          "Termination rights may favor one party and limit flexibility.",
+        severity: "medium" as const,
+      },
+      {
+        risk: "Liability exposure",
+        explanation:
+          "Liability limits may not fully protect against indirect losses.",
+        severity: "high" as const,
+      },
+      {
+        risk: "Payment timing uncertainty",
+        explanation: "Payment triggers may be unclear or dependent on broad terms.",
+        severity: "low" as const,
+      },
+      {
+        risk: "Weak dispute language",
+        explanation: "Dispute resolution details may not be comprehensive.",
+        severity: "low" as const,
+      },
+    ],
+    opportunities: [
+      {
+        opportunity: "Scope clarity improvements",
+        explanation:
+          "Defining deliverables and milestones clearly can reduce misunderstandings.",
+        impact: "high" as const,
+      },
+      {
+        opportunity: "Negotiable renewal terms",
+        explanation:
+          "Renewal and extension clauses can be tuned for better long-term value.",
+        impact: "medium" as const,
+      },
+      {
+        opportunity: "Performance-linked safeguards",
+        explanation:
+          "Adding objective KPIs can improve enforceability and transparency.",
+        impact: "medium" as const,
+      },
+      {
+        opportunity: "Stronger confidentiality wording",
+        explanation:
+          "Clarified confidentiality scope can better protect sensitive information.",
+        impact: "low" as const,
+      },
+      {
+        opportunity: "Balanced indemnity terms",
+        explanation:
+          "Refining indemnity language can reduce one-sided legal and financial risk.",
+        impact: "low" as const,
+      },
+    ],
+    summary: `This ${contractType} was analyzed in local demo mode. The structure appears usable, but obligations, termination, and liability sections should be reviewed and negotiated before signing.`,
+    overallScore: 67,
+  };
+
+  if (tier === "free") {
+    return base;
+  }
+
+  return {
+    ...base,
+    risks: [
+      ...base.risks,
+      {
+        risk: "Jurisdiction mismatch",
+        explanation:
+          "Governing law and venue may increase litigation cost or complexity.",
+        severity: "medium" as const,
+      },
+      {
+        risk: "Data handling ambiguity",
+        explanation:
+          "Data ownership and retention language may not align with best practices.",
+        severity: "medium" as const,
+      },
+    ],
+    opportunities: [
+      ...base.opportunities,
+      {
+        opportunity: "Defined change control process",
+        explanation:
+          "A formal change process helps manage scope changes without disputes.",
+        impact: "high" as const,
+      },
+      {
+        opportunity: "Explicit acceptance criteria",
+        explanation:
+          "Acceptance standards reduce delivery ambiguity and payment delays.",
+        impact: "medium" as const,
+      },
+    ],
+    recommendations: [
+      "Clarify scope, deliverables, and acceptance criteria.",
+      "Cap liability and exclude indirect damages where possible.",
+      "Add objective milestones tied to payment terms.",
+      "Define clear cure periods before termination.",
+    ],
+    keyClauses: [
+      "Scope of Work",
+      "Payment Terms",
+      "Termination",
+      "Confidentiality",
+      "Liability and Indemnity",
+      "Dispute Resolution",
+    ],
+    legalCompliance:
+      "No legal opinion. Perform jurisdiction-specific legal review before execution.",
+    negotiationPoints: [
+      "Liability cap and indemnity scope",
+      "Termination for convenience and notice period",
+      "Payment timing and late-fee handling",
+      "IP ownership and license rights",
+    ],
+    contractDuration: "As specified in agreement term section",
+    terminationConditions:
+      "Typically includes breach, insolvency, and convenience with notice.",
+    financialTerms: {
+      description: "Review fee schedule, payment milestones, and penalties.",
+      details: [
+        "Validate invoicing cycles",
+        "Confirm taxes and pass-through costs",
+        "Clarify refund or holdback terms",
+      ],
+    },
+    performanceMetrics: ["Delivery timelines", "Quality benchmarks"],
+    specificClauses:
+      "Verify clauses specific to this contract type and applicable regulations.",
+  };
+};
+
+const normalizeAnalysis = (
+  raw: Record<string, any>,
+  contractType: string,
+  tier: Tier
+) => {
+  const fallback = buildFallbackAnalysis(contractType, tier);
+
+  const risks = Array.isArray(raw.risks) && raw.risks.length > 0 ? raw.risks : fallback.risks;
+  const opportunities =
+    Array.isArray(raw.opportunities) && raw.opportunities.length > 0
+      ? raw.opportunities
+      : fallback.opportunities;
+  const summary =
+    typeof raw.summary === "string" && raw.summary.trim().length > 0
+      ? raw.summary
+      : fallback.summary;
+  const overallScore =
+    typeof raw.overallScore === "number"
+      ? raw.overallScore
+      : Number(raw.overallScore) || fallback.overallScore;
+
+  return {
+    ...fallback,
+    ...raw,
+    risks,
+    opportunities,
+    summary,
+    overallScore,
+  };
+};
+
+const tryParseJsonFromText = (text: string): Record<string, any> | null => {
   try {
-    const fileData = await redis.get(fileKey);
-    if (!fileData) {
-      throw new Error("File not found");
+    return JSON.parse(text);
+  } catch {
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    try {
+      return JSON.parse(match[0]);
+    } catch {
+      return null;
     }
+  }
+};
 
-    let fileBuffer: Uint8Array;
-    if (Buffer.isBuffer(fileData)) {
-      fileBuffer = new Uint8Array(fileData);
-    } else if (typeof fileData === "object" && fileData !== null) {
-      // check if the the object has the expected structure
-      const bufferData = fileData as { type?: string; data?: number[] };
-      if (bufferData.type === "Buffer" && Array.isArray(bufferData.data)) {
-        fileBuffer = new Uint8Array(bufferData.data);
-      } else {
-        throw new Error("Invalid file data");
-      }
-    } else {
-      throw new Error("Invalid file data");
-    }
-
-    const pdf = await getDocument({ data: fileBuffer }).promise;
+export const extractTextFromPDF = async (fileBuffer: Buffer) => {
+  try {
+    const pdf = await getDocument({ data: new Uint8Array(fileBuffer) }).promise;
     let text = "";
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
@@ -37,7 +243,6 @@ export const extractTextFromPDF = async (fileKey: string) => {
     }
     return text;
   } catch (error) {
-    console.log(error);
     throw new Error(
       `Failed to extract text from PDF. Error: ${JSON.stringify(error)}`
     );
@@ -47,6 +252,10 @@ export const extractTextFromPDF = async (fileKey: string) => {
 export const detectContractType = async (
   contractText: string
 ): Promise<string> => {
+  if (!aiModel) {
+    return inferContractTypeFromText(contractText);
+  }
+
   const prompt = `
     Analyze the following contract text and determine the type of contract it is.
     Provide only the contract type as a single string (e.g., "Employment", "Non-Disclosure Agreement", "Sales", "Lease", etc.).
@@ -56,16 +265,24 @@ export const detectContractType = async (
     ${contractText.substring(0, 2000)}
   `;
 
-  const results = await aiModel.generateContent(prompt);
-  const response = results.response;
-  return response.text().trim();
+  try {
+    const results = await aiModel.generateContent(prompt);
+    const response = results.response;
+    return response.text().trim();
+  } catch {
+    return inferContractTypeFromText(contractText);
+  }
 };
 
 export const analyzeContractWithAI = async (
   contractText: string,
-  tier: "free" | "premium",
+  tier: Tier,
   contractType: string
 ) => {
+  if (!aiModel) {
+    return buildFallbackAnalysis(contractType, tier);
+  }
+
   let prompt;
   if (tier === "premium") {
     prompt = `
@@ -81,132 +298,41 @@ export const analyzeContractWithAI = async (
     9. A summary of termination conditions, if applicable.
     10. A breakdown of any financial terms or compensation structure, if applicable.
     11. Any performance metrics or KPIs mentioned, if applicable.
-    12. A summary of any specific clauses relevant to this type of contract (e.g., intellectual property for employment contracts, warranties for sales contracts).
-    13. An overall score from 1 to 100, with 100 being the highest. This score represents the overall favorability of the contract based on the identified risks and opportunities.
+    12. A summary of any specific clauses relevant to this type of contract.
+    13. An overall score from 1 to 100.
 
-    Format your response as a JSON object with the following structure:
-    {
-      "risks": [{"risk": "Risk description", "explanation": "Brief explanation", "severity": "low|medium|high"}],
-      "opportunities": [{"opportunity": "Opportunity description", "explanation": "Brief explanation", "impact": "low|medium|high"}],
-      "summary": "Comprehensive summary of the contract",
-      "recommendations": ["Recommendation 1", "Recommendation 2", ...],
-      "keyClauses": ["Clause 1", "Clause 2", ...],
-      "legalCompliance": "Assessment of legal compliance",
-      "negotiationPoints": ["Point 1", "Point 2", ...],
-      "contractDuration": "Duration of the contract, if applicable",
-      "terminationConditions": "Summary of termination conditions, if applicable",
-      "overallScore": "Overall score from 1 to 100",
-      "financialTerms": {
-        "description": "Overview of financial terms",
-        "details": ["Detail 1", "Detail 2", ...]
-      },
-      "performanceMetrics": ["Metric 1", "Metric 2", ...],
-      "specificClauses": "Summary of clauses specific to this contract type"
-    }
-      `;
+    Return a JSON object only.
+    `;
   } else {
     prompt = `
     Analyze the following ${contractType} contract and provide:
-    1. A list of at least 5 potential risks for the party receiving the contract, each with a brief explanation and severity level (low, medium, high).
-    2. A list of at least 5 potential opportunities or benefits for the receiving party, each with a brief explanation and impact level (low, medium, high).
-    3. A brief summary of the contract
-    4. An overall score from 1 to 100, with 100 being the highest. This score represents the overall favorability of the contract based on the identified risks and opportunities.
+    1. At least 5 potential risks with severity.
+    2. At least 5 potential opportunities with impact.
+    3. A brief summary.
+    4. An overall score from 1 to 100.
 
-     {
-      "risks": [{"risk": "Risk description", "explanation": "Brief explanation"}],
-      "opportunities": [{"opportunity": "Opportunity description", "explanation": "Brief explanation"}],
-      "summary": "Brief summary of the contract",
-      "overallScore": "Overall score from 1 to 100"
-    }
-`;
+    Return a JSON object only.
+    `;
   }
 
   prompt += `
-    Important: Provide only the JSON object in your response, without any additional text or formatting. 
-    
-    
     Contract text:
     ${contractText}
     `;
 
-  const results = await aiModel.generateContent(prompt);
-  const response = await results.response;
-  let text = response.text();
-
-  // remove any markdown formatting
-  text = text.replace(/```json\n?|\n?```/g, "").trim();
-
   try {
-    // Attempt to fix common JSON errors
-    text = text.replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3'); // Ensure all keys are quoted
-    text = text.replace(/:\s*"([^"]*)"([^,}\]])/g, ': "$1"$2'); // Ensure all string values are properly quoted
-    text = text.replace(/,\s*}/g, "}"); // Remove trailing commas
-
-    const analysis = JSON.parse(text);
-    return analysis;
-  } catch (error) {
-    console.log("Error parsing JSON:", error);
+    const results = await aiModel.generateContent(prompt);
+    const response = await results.response;
+    const text = response
+      .text()
+      .replace(/```json\n?|\n?```/g, "")
+      .trim();
+    const parsed = tryParseJsonFromText(text);
+    if (!parsed) {
+      return buildFallbackAnalysis(contractType, tier);
+    }
+    return normalizeAnalysis(parsed, contractType, tier);
+  } catch {
+    return buildFallbackAnalysis(contractType, tier);
   }
-
-  interface IRisk {
-    risk: string;
-    explanation: string;
-  }
-
-  interface IOpportunity {
-    opportunity: string;
-    explanation: string;
-  }
-
-  interface FallbackAnalysis {
-    risks: IRisk[];
-    opportunities: IOpportunity[];
-    summary: string;
-  }
-
-  const fallbackAnalysis: FallbackAnalysis = {
-    risks: [],
-    opportunities: [],
-    summary: "Error analyzing contract",
-  };
-
-  // Extract risks
-  const risksMatch = text.match(/"risks"\s*:\s*\[([\s\S]*?)\]/);
-  if (risksMatch) {
-    fallbackAnalysis.risks = risksMatch[1].split("},").map((risk) => {
-      const riskMatch = risk.match(/"risk"\s*:\s*"([^"]*)"/);
-      const explanationMatch = risk.match(/"explanation"\s*:\s*"([^"]*)"/);
-      return {
-        risk: riskMatch ? riskMatch[1] : "Unknown",
-        explanation: explanationMatch ? explanationMatch[1] : "Unknown",
-      };
-    });
-  }
-
-  //Extact opportunities
-  const opportunitiesMatch = text.match(/"opportunities"\s*:\s*\[([\s\S]*?)\]/);
-  if (opportunitiesMatch) {
-    fallbackAnalysis.opportunities = opportunitiesMatch[1]
-      .split("},")
-      .map((opportunity) => {
-        const opportunityMatch = opportunity.match(
-          /"opportunity"\s*:\s*"([^"]*)"/
-        );
-        const explanationMatch = opportunity.match(
-          /"explanation"\s*:\s*"([^"]*)"/
-        );
-        return {
-          opportunity: opportunityMatch ? opportunityMatch[1] : "Unknown",
-          explanation: explanationMatch ? explanationMatch[1] : "Unknown",
-        };
-      });
-  }
-
-  // Extract summary
-  const summaryMatch = text.match(/"summary"\s*:\s*"([^"]*)"/);
-  if (summaryMatch) {
-    fallbackAnalysis.summary = summaryMatch[1];
-  }
-
-  return fallbackAnalysis;
 };

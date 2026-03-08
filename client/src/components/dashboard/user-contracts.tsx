@@ -1,7 +1,7 @@
 import { ContractAnalysis } from "@/interfaces/contract.interface";
 import { api } from "@/lib/api";
-import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 
 import {
   ColumnDef,
@@ -32,7 +32,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import { MoreHorizontal } from "lucide-react";
+import { Download, MoreHorizontal } from "lucide-react";
 import Link from "next/link";
 import {
   AlertDialog,
@@ -45,8 +45,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Input } from "../ui/input";
+import { toast } from "sonner";
 
 export default function UserContracts() {
+  const queryClient = useQueryClient();
   const { data: contracts } = useQuery<ContractAnalysis[]>({
     queryKey: ["user-contracts"],
     queryFn: () => fetchUserContracts(),
@@ -54,6 +57,20 @@ export default function UserContracts() {
 
   const [sorting, setSorting] = useState<SortingState>([]);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const deleteMutation = useMutation({
+    mutationFn: async (contractId: string) => {
+      await api.delete(`/contracts/contract/${contractId}`);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["user-contracts"] });
+      toast.success("Contract deleted");
+    },
+    onError: () => {
+      toast.error("Failed to delete contract");
+    },
+  });
 
   const contractTypeColors: { [key: string]: string } = {
     Employment: "bg-blue-100 text-blue-800 hover:bg-blue-200",
@@ -144,7 +161,11 @@ export default function UserContracts() {
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction>Continue</AlertDialogAction>
+                    <AlertDialogAction
+                      onClick={() => deleteMutation.mutate(contract._id)}
+                    >
+                      Continue
+                    </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
@@ -155,8 +176,20 @@ export default function UserContracts() {
     },
   ];
 
+  const filteredContracts = useMemo(() => {
+    const rows = contracts ?? [];
+    if (!search.trim()) return rows;
+
+    const query = search.toLowerCase();
+    return rows.filter(
+      (row) =>
+        row._id.toLowerCase().includes(query) ||
+        row.contractType.toLowerCase().includes(query)
+    );
+  }, [contracts, search]);
+
   const table = useReactTable({
-    data: contracts ?? [],
+    data: filteredContracts,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
@@ -181,18 +214,70 @@ export default function UserContracts() {
       contract.risks.some((risk) => risk.severity === "high")
     ).length ?? 0;
 
+  const exportContractsToCsv = () => {
+    if (!contracts || contracts.length === 0) return;
+
+    const headers = [
+      "contractId",
+      "contractType",
+      "overallScore",
+      "createdAt",
+      "riskCount",
+      "opportunityCount",
+    ];
+
+    const rows = contracts.map((contract) => [
+      contract._id,
+      contract.contractType,
+      String(contract.overallScore ?? 0),
+      new Date(contract.createdAt).toISOString(),
+      String(contract.risks?.length ?? 0),
+      String(contract.opportunities?.length ?? 0),
+    ]);
+
+    const csv = [headers, ...rows]
+      .map((line) => line.map((value) => `"${value.replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "contracts-export.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
-    <div className="container mx-auto p-6 space-y-8">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Your Contracts</h1>
-        <Button onClick={() => setIsUploadModalOpen(true)}>New Contract</Button>
+    <div className="container mx-auto space-y-6 p-3 sm:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-bold leading-tight sm:text-3xl">Your Contracts</h1>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <Button variant="outline" onClick={exportContractsToCsv} className="w-full sm:w-auto">
+            <Download className="mr-2 size-4" />
+            Export CSV
+          </Button>
+          <Button onClick={() => setIsUploadModalOpen(true)} className="w-full sm:w-auto">
+            New Contract
+          </Button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="w-full sm:max-w-md">
+        <Input
+          placeholder="Search by contract ID or type..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Total Contracts
+              Average Score
             </CardTitle>
           </CardHeader>
           <CardContent>

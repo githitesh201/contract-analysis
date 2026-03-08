@@ -1,13 +1,19 @@
 import { Resend } from "resend";
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-
-export const resend = new Resend(RESEND_API_KEY);
+const resend =
+  RESEND_API_KEY && RESEND_API_KEY.trim().length > 0
+    ? new Resend(RESEND_API_KEY)
+    : null;
 
 export const sendPremiumConfirmationEmail = async (
   userEmail: string,
   userName: string
 ) => {
+  if (!resend) {
+    return;
+  }
+
   try {
     await resend.emails.send({
       from: "Acme <onboarding@resend.dev>",

@@ -18,16 +18,19 @@ export function useSubscription() {
   } = useQuery({
     queryKey: ["subscriptionStatus"],
     queryFn: fetchSubscriptionStatus,
-    // enabled: !!user,
+    enabled: !!user,
   });
 
   async function fetchSubscriptionStatus() {
-    const response = await api.get("/payments/membership-status");
-    if (response.status !== 200) {
-      throw new Error("Failed to fetch subscription status");
+    try {
+      const response = await api.get("/payments/membership-status");
+      if (response.status !== 200) {
+        throw new Error("Failed to fetch subscription status");
+      }
+      return response.data;
+    } catch {
+      return { status: "inactive" };
     }
-
-    return response.data;
   }
 
   return {

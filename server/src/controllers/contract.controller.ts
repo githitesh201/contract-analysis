@@ -1,12 +1,13 @@
 import { Request, Response } from "express";
 import multer from "multer";
 import { IUser } from "../models/user.model";
-import redis from "../config/redis";
 import {
+  AI_MODEL,
   analyzeContractWithAI,
   detectContractType,
   extractTextFromPDF,
 } from "../services/ai.services";
+import ContractCache from "../models/contract-cache.model";
 import ContractAnalysisSchema, {
   IContractAnalysis,
 } from "../models/contract.model";
@@ -38,15 +39,8 @@ export const detectAndConfirmContractType = async (
   }
 
   try {
-    const fileKey = `file:${user._id}:${Date.now()}`;
-    await redis.set(fileKey, req.file.buffer);
-
-    await redis.expire(fileKey, 3600); // 1 hour
-
-    const pdfText = await extractTextFromPDF(fileKey);
+    const pdfText = await extractTextFromPDF(req.file.buffer);
     const detectedType = await detectContractType(pdfText);
-
-    await redis.del(fileKey);
 
     res.json({ detectedType });
   } catch (error) {
@@ -68,11 +62,7 @@ export const analyzeContract = async (req: Request, res: Response) => {
   }
 
   try {
-    const fileKey = `file:${user._id}:${Date.now()}`;
-    await redis.set(fileKey, req.file.buffer);
-    await redis.expire(fileKey, 3600); // 1 hour
-
-    const pdfText = await extractTextFromPDF(fileKey);
+    const pdfText = await extractTextFromPDF(req.file.buffer);
     let analysis;
 
     if (user.isPremium) {
@@ -91,7 +81,7 @@ export const analyzeContract = async (req: Request, res: Response) => {
       contractType,
       ...(analysis as Partial<IContractAnalysis>),
       language: "en",
-      aiModel: "gemini-pro",
+      aiModel: AI_MODEL,
     });
 
     res.json(savedAnalysis);
@@ -130,9 +120,9 @@ export const getContractByID = async (req: Request, res: Response) => {
   }
 
   try {
-    const cachedContracts = await redis.get(`contract:${id}`);
-    if (cachedContracts) {
-      return res.json(cachedContracts);
+    const cachedContract = await ContractCache.findOne({ contractId: id }).lean();
+    if (cachedContract) {
+      return res.json(cachedContract.data);
     }
 
     //if not in cache, get from db
@@ -145,12 +135,46 @@ export const getContractByID = async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Contract not found" });
     }
 
-    //Cache the results for future requests
-    await redis.set(`contract:${id}`, contract, { ex: 3600 }); // 1 hour
+    await ContractCache.findOneAndUpdate(
+      { contractId: id },
+      {
+        data: contract.toObject(),
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      },
+      { upsert: true }
+    );
 
     res.json(contract);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Failed to get contract" });
+  }
+};
+
+export const deleteContractById = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const user = req.user as IUser;
+
+  if (!isValidMongoId(id)) {
+    res.status(400).json({ error: "Invalid contract ID" });
+    return;
+  }
+
+  try {
+    const deleted = await ContractAnalysisSchema.findOneAndDelete({
+      _id: id,
+      userId: user._id,
+    });
+
+    if (!deleted) {
+      res.status(404).json({ error: "Contract not found" });
+      return;
+    }
+
+    await ContractCache.deleteOne({ contractId: id });
+    res.status(200).json({ status: "ok" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to delete contract" });
   }
 };

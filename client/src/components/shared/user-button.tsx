@@ -26,26 +26,33 @@ export function UserButton() {
   };
 
   return (
-    <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
+    <div className="flex items-center justify-end space-x-2">
       {user ? (
         <>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="size-8 rounded-full">
-                <Avatar className="size-8">
+              <Button
+                variant="ghost"
+                className="relative flex h-10 w-10 items-center justify-center rounded-full border border-slate-200/80 bg-white/80 p-0 shadow-sm transition-all hover:border-slate-300 hover:bg-white"
+              >
+                <Avatar className="size-8 ring-2 ring-cyan-100">
                   <AvatarImage src={user?.profilePicture || ""} />
                   <AvatarFallback>
-                    {user?.displayName?.charAt(0) || ""}
+                    {user?.displayName
+                      ?.split(" ")
+                      .map((part: string) => part.charAt(0))
+                      .join("")
+                      .slice(0, 2)
+                      .toUpperCase() || ""}
                   </AvatarFallback>
                 </Avatar>
+                <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56" forceMount>
-              <DropdownMenuItem className="flex flex-col items-start">
-                <div className="text-sm font-medium">{user?.displayName}</div>
-                <div className="text-sm text-muted-foreground">
-                  {user?.email}
-                </div>
+            <DropdownMenuContent className="w-64 rounded-xl border-slate-200/80 bg-white/95 p-1.5 shadow-xl" forceMount>
+              <DropdownMenuItem className="flex cursor-default flex-col items-start rounded-lg bg-slate-50 p-3 focus:bg-slate-50">
+                <div className="text-sm font-semibold text-slate-900">{user?.displayName}</div>
+                <div className="text-xs text-slate-500">{user?.email}</div>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>

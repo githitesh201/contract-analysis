@@ -50,57 +50,66 @@ const features = [
 
 export function HeroSection() {
   return (
-    <section className="w-full py-12 md:py-24 lg:py-32 bg-gradient-to-b from-background to-background/80">
-      <div className="container px-4 md:px-6 flex flex-col items-center max-w-6xl mx-auto">
+    <section className="relative w-full overflow-hidden bg-gradient-to-b from-cyan-50 via-white to-slate-50 py-14 md:py-24 lg:py-28">
+      <div className="pointer-events-none absolute -top-20 -left-24 size-72 rounded-full bg-cyan-200/40 blur-3xl" />
+      <div className="pointer-events-none absolute top-20 -right-24 size-72 rounded-full bg-blue-200/40 blur-3xl" />
+      <div className="container relative mx-auto flex max-w-6xl flex-col items-center px-4 md:px-6">
         <Link
           href={"/dashboard"}
           className={cn(
             buttonVariants({ variant: "outline", size: "sm" }),
-            "px-4 py-2 mb-4 rounded-full hidden md:flex"
+            "mb-5 hidden rounded-full border-cyan-200 bg-white/70 px-4 py-2 text-slate-700 md:flex"
           )}
         >
           <span className="mr-3 hidden md:block">
-            <Sparkles className="size-3.5" />
+            <Sparkles className="size-3.5 text-cyan-600" />
           </span>
-          Introducing Simple Metrics for your team
+          Trusted by fast-moving legal and ops teams
         </Link>
-        <div className="text-center mb-12 w-full">
-          <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl xl:text-6xl/none bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary mb-4">
-            Revoltionzie Your Contracts
+        <div className="mb-12 w-full text-center">
+          <h1 className="mb-4 bg-gradient-to-r from-slate-900 via-slate-800 to-cyan-700 bg-clip-text text-4xl font-extrabold tracking-tight text-transparent sm:text-5xl xl:text-6xl/none">
+            Revolutionize Your Contracts
           </h1>
-          <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto">
+          <p className="mx-auto mb-8 max-w-3xl text-lg text-slate-600 sm:text-xl">
             Harness the power of AI to analyze, understand, and optimize your
             contracts in no time.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
-            <Button
-              className="inline-flex items-center justify-center text-lg"
-              size={"lg"}
-            >
-              Get Started
-              <ArrowRight className="ml-2 size-5" />
-            </Button>
-            <Button
-              className="inline-flex items-center justify-center text-lg"
-              size={"lg"}
-              variant={"outline"}
-            >
-              Learn More
-              <Globe className="ml-2 size-5" />
-            </Button>
+          <div className="mb-12 flex flex-col justify-center gap-4 sm:flex-row">
+            <Link href="/dashboard">
+              <Button
+                className="inline-flex items-center justify-center bg-slate-900 text-lg text-white hover:bg-slate-800"
+                size={"lg"}
+              >
+                Get Started
+                <ArrowRight className="ml-2 size-5" />
+              </Button>
+            </Link>
+            <Link href="/#pricing">
+              <Button
+                className="inline-flex items-center justify-center border-slate-300 text-lg text-slate-700 hover:bg-slate-100"
+                size={"lg"}
+                variant={"outline"}
+              >
+                Learn More
+                <Globe className="ml-2 size-5" />
+              </Button>
+            </Link>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full mb-12">
+          <div className="mb-12 grid w-full grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
             {features.map((feature) => (
-              <Card key={feature.title} className="h-full">
+              <Card
+                key={feature.title}
+                className="h-full border-slate-200/80 bg-white/80 transition-transform duration-300 hover:-translate-y-1"
+              >
                 <CardContent className="p-6 flex flex-col items-center text-center">
-                  <div className="size-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                    <feature.icon className="text-primary" />
+                  <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-cyan-100">
+                    <feature.icon className="text-cyan-700" />
                   </div>
                   <h3 className="text-lg font-semibold mb-2">
                     {feature.title}
                   </h3>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-slate-600">
                     {feature.description}
                   </p>
                 </CardContent>

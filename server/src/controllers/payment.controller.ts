@@ -3,12 +3,27 @@ import Stripe from "stripe";
 import User, { IUser } from "../models/user.model";
 import { sendPremiumConfirmationEmail } from "../services/email.service";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-09-30.acacia",
-});
+const getStripeClient = () => {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key || key.trim().length === 0 || key.startsWith("sk_test_local")) {
+    return null;
+  }
+
+  return new Stripe(key, {
+    apiVersion: "2024-09-30.acacia",
+  });
+};
 
 export const createCheckoutSession = async (req: Request, res: Response) => {
   const user = req.user as any;
+  const stripe = getStripeClient();
+
+  if (!stripe) {
+    res
+      .status(503)
+      .json({ error: "Payments are not configured in this environment" });
+    return;
+  }
 
   try {
     const session = await stripe.checkout.sessions.create({
@@ -40,6 +55,12 @@ export const createCheckoutSession = async (req: Request, res: Response) => {
 };
 
 export const handleWebhook = async (req: Request, res: Response) => {
+  const stripe = getStripeClient();
+  if (!stripe) {
+    res.status(503).json({ error: "Webhook unavailable" });
+    return;
+  }
+
   const sig = req.headers["stripe-signature"] as string;
 
   let event: Stripe.Event;

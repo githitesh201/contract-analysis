@@ -12,6 +12,11 @@ import {
 import { Button } from "../ui/button";
 import Link from "next/link";
 import { useModalStore } from "@/store/zustand";
+import { api } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { useState } from "react";
 
 export function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useCurrentUser();
@@ -39,6 +44,23 @@ export function ProtectedLayout({ children }: { children: React.ReactNode }) {
 
 export default function AuthCard() {
   const { openModal } = useModalStore();
+  const queryClient = useQueryClient();
+  const router = useRouter();
+  const [isDemoLoading, setIsDemoLoading] = useState(false);
+
+  const handleDemoLogin = async () => {
+    try {
+      setIsDemoLoading(true);
+      await api.post("/auth/demo-login");
+      await queryClient.invalidateQueries({ queryKey: ["currentUser"] });
+      router.refresh();
+      router.push("/dashboard");
+    } catch {
+      toast.error("Demo login failed. Please try again.");
+    } finally {
+      setIsDemoLoading(false);
+    }
+  };
 
   return (
     <Card className="w-full max-w-3xl mx-auto">
@@ -63,6 +85,14 @@ export default function AuthCard() {
                 variant={"outline"}
               >
                 Continue with Google
+              </Button>
+              <Button
+                onClick={handleDemoLogin}
+                className="flex-1"
+                variant={"outline"}
+                disabled={isDemoLoading}
+              >
+                {isDemoLoading ? "Signing in..." : "Continue with Demo Account"}
               </Button>
               <Link href={"/"} className="flex-1">
                 <Button className="w-full">Back to Home</Button>

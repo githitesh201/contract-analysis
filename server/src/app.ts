@@ -10,6 +10,7 @@ import passport from "passport";
 import session from "express-session";
 import MongoStore from "connect-mongo";
 import "./config/passport";
+import ContractCache from "./models/contract-cache.model";
 
 // routes
 import authRoute from "./routes/auth";
@@ -21,12 +22,37 @@ const app = express();
 
 mongoose
   .connect(process.env.MONGODB_URI!)
-  .then(() => console.log("Connected to MongoDB"))
+  .then(async () => {
+    console.log("Connected to MongoDB");
+    try {
+      await ContractCache.syncIndexes();
+      console.log("Contract cache TTL index verified");
+    } catch (indexError) {
+      console.error("Failed to verify contract cache TTL index", indexError);
+    }
+  })
   .catch((err) => console.error(err));
 
 app.use(
   cors({
-    origin: process.env.CLIENT_URL,
+    origin: (origin, callback) => {
+      const configuredOrigin = process.env.CLIENT_URL;
+      const allowedOrigins = new Set<string>([
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+      ]);
+
+      if (configuredOrigin) {
+        allowedOrigins.add(configuredOrigin);
+      }
+
+      if (!origin || allowedOrigins.has(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
   })
 );
