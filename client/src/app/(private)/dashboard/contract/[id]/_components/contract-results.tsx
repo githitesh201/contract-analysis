@@ -14,29 +14,24 @@ interface IContractResultsProps {
 export default function ContractResults({ contractId }: IContractResultsProps) {
   const { user } = useCurrentUser();
   const [analysisResults, setAnalysisResults] = useState<ContractAnalysis>();
-  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<boolean>(false);
 
   useEffect(() => {
+    const fetchAnalysisResults = async (id: string) => {
+      try {
+        const response = await api.get(`/contracts/contract/${id}`);
+        setAnalysisResults(response.data);
+        setError(false);
+      } catch (fetchError) {
+        console.error(fetchError);
+        setError(true);
+      }
+    };
+
     if (user) {
       fetchAnalysisResults(contractId);
     }
-  }, [user]);
-
-  const fetchAnalysisResults = async (id: string) => {
-    try {
-      setLoading(true);
-      const response = await api.get(`/contracts/contract/${id}`);
-      setAnalysisResults(response.data);
-      console.log(response.data);
-      setError(false);
-    } catch (error) {
-      console.error(error);
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [user, contractId]);
 
   if (error) {
     return notFound();
