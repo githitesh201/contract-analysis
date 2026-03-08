@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
 import multer from "multer";
 import { IUser } from "../models/user.model";
 import {
@@ -16,6 +16,10 @@ import { isValidMongoId } from "../utils/mongoUtils";
 
 const upload = multer({
   storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10 MB
+    files: 1,
+  },
   fileFilter: (req, file, cb) => {
     if (file.mimetype === "application/pdf") {
       cb(null, true);
@@ -26,7 +30,25 @@ const upload = multer({
   },
 }).single("contract");
 
-export const uploadMiddleware = upload;
+export const uploadMiddleware = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  upload(req, res, (error?: unknown) => {
+    if (!error) {
+      next();
+      return;
+    }
+
+    if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+      res.status(413).json({ error: "File too large. Max size is 10MB." });
+      return;
+    }
+
+    res.status(400).json({ error: "Invalid upload. Only PDF files are allowed." });
+  });
+};
 
 export const detectAndConfirmContractType = async (
   req: Request,

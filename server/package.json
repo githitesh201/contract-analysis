@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "app.js",
   "scripts": {
-    "start": "ts-node dist/app.js",
+    "start": "node dist/app.js",
     "build": "tsc",
     "dev": "nodemon --watch 'src/**/*' --exec 'ts-node src/app.ts'"
   },

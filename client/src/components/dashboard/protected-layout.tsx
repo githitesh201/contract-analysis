@@ -17,6 +17,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useState } from "react";
+const demoAuthEnabled = process.env.NEXT_PUBLIC_ENABLE_DEMO_AUTH === "true";
 
 export function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useCurrentUser();
@@ -86,14 +87,16 @@ export default function AuthCard() {
               >
                 Continue with Google
               </Button>
-              <Button
-                onClick={handleDemoLogin}
-                className="flex-1"
-                variant={"outline"}
-                disabled={isDemoLoading}
-              >
-                {isDemoLoading ? "Signing in..." : "Continue with Demo Account"}
-              </Button>
+              {demoAuthEnabled && (
+                <Button
+                  onClick={handleDemoLogin}
+                  className="flex-1"
+                  variant={"outline"}
+                  disabled={isDemoLoading}
+                >
+                  {isDemoLoading ? "Signing in..." : "Continue with Demo Account"}
+                </Button>
+              )}
               <Link href={"/"} className="flex-1">
                 <Button className="w-full">Back to Home</Button>
               </Link>

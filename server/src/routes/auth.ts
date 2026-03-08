@@ -1,15 +1,23 @@
 import express from "express";
 import passport from "passport";
 import User, { IUser } from "../models/user.model";
+import { NextFunction, Request, Response } from "express";
 
 const router = express.Router();
 const hasGoogleOAuthConfig = Boolean(
   process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
 );
+const demoAuthEnabled =
+  process.env.ENABLE_DEMO_AUTH === "true" || process.env.NODE_ENV !== "production";
 const LOCAL_DEMO_EMAIL = process.env.LOCAL_DEMO_EMAIL || "demo@contractanalysis.local";
 const LOCAL_DEMO_PASSWORD = process.env.LOCAL_DEMO_PASSWORD || "demo1234";
 
-const completeLogin = (req: any, res: any, next: any, user: any) => {
+const completeLogin = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  user: IUser
+) => {
   req.session.regenerate((sessionError: Error | null) => {
     if (sessionError) {
       return next(sessionError);
@@ -28,6 +36,14 @@ const completeLogin = (req: any, res: any, next: any, user: any) => {
       });
     });
   });
+};
+
+const assertDemoAuthEnabled = (req: Request, res: Response, next: NextFunction) => {
+  if (!demoAuthEnabled) {
+    res.status(403).json({ error: "Demo auth is disabled" });
+    return;
+  }
+  next();
 };
 
 router.get(
@@ -57,7 +73,7 @@ router.get(
   }
 );
 
-router.post("/demo-login", async (req, res, next) => {
+router.post("/demo-login", assertDemoAuthEnabled, async (req, res, next) => {
   try {
     const demoEmail = LOCAL_DEMO_EMAIL;
 
@@ -85,7 +101,7 @@ router.post("/demo-login", async (req, res, next) => {
   }
 });
 
-router.post("/local-login", async (req, res, next) => {
+router.post("/local-login", assertDemoAuthEnabled, async (req, res, next) => {
   try {
     const email = String(req.body?.email || "").trim().toLowerCase();
     const password = String(req.body?.password || "");
@@ -162,15 +178,27 @@ router.put("/settings", async (req, res) => {
     timezone?: string;
   } = req.body;
 
+  const normalizeString = (value: string, maxLen: number) =>
+    value.trim().replace(/\s+/g, " ").slice(0, maxLen);
+
   const updates: Partial<IUser> = {};
-  if (typeof projectName === "string") updates.projectName = projectName;
+  if (typeof projectName === "string") {
+    const normalized = normalizeString(projectName, 80);
+    if (!normalized) {
+      res.status(400).json({ error: "Project name cannot be empty" });
+      return;
+    }
+    updates.projectName = normalized;
+  }
   if (typeof projectDescription === "string") {
-    updates.projectDescription = projectDescription;
+    updates.projectDescription = normalizeString(projectDescription, 300);
   }
   if (typeof defaultLanguage === "string") {
-    updates.defaultLanguage = defaultLanguage;
+    updates.defaultLanguage = normalizeString(defaultLanguage, 50);
   }
-  if (typeof timezone === "string") updates.timezone = timezone;
+  if (typeof timezone === "string") {
+    updates.timezone = normalizeString(timezone, 60);
+  }
 
   const updatedUser = await User.findByIdAndUpdate(user._id, updates, {
     new: true,

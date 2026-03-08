@@ -17,6 +17,7 @@ import { Checkbox } from "../ui/checkbox";
 import { Label } from "../ui/label";
 import { api, getApiBaseUrl } from "@/lib/api";
 import { Input } from "../ui/input";
+const demoAuthEnabled = process.env.NEXT_PUBLIC_ENABLE_DEMO_AUTH === "true";
 
 function googleSignIn(): Promise<void> {
   return new Promise((resolve) => {
@@ -109,7 +110,12 @@ export function ConnectAccountModal() {
         <div className="grid gap-4 py-4">
           <Button
             onClick={handleGoogleSignIn}
-            disabled={!isAgreed || googleMutation.isPending || demoMutation.isPending}
+            disabled={
+              !isAgreed ||
+              googleMutation.isPending ||
+              demoMutation.isPending ||
+              localLoginMutation.isPending
+            }
             className="w-full"
           >
             {googleMutation.isPending ? (
@@ -118,60 +124,64 @@ export function ConnectAccountModal() {
               <>Sign in with Google</>
             )}
           </Button>
-          <div className="space-y-2 rounded-md border p-3">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="demo@contractanalysis.local"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="demo1234"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+          {demoAuthEnabled && (
+            <div className="space-y-2 rounded-md border p-3">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="demo@contractanalysis.local"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="demo1234"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <Button
+                onClick={() => localLoginMutation.mutate()}
+                disabled={
+                  !isAgreed ||
+                  !email.trim() ||
+                  !password ||
+                  googleMutation.isPending ||
+                  demoMutation.isPending ||
+                  localLoginMutation.isPending
+                }
+                className="w-full"
+                variant="outline"
+              >
+                {localLoginMutation.isPending ? (
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                ) : (
+                  <>Login with Email & Password</>
+                )}
+              </Button>
+            </div>
+          )}
+          {demoAuthEnabled && (
             <Button
-              onClick={() => localLoginMutation.mutate()}
+              onClick={handleDemoSignIn}
               disabled={
                 !isAgreed ||
-                !email.trim() ||
-                !password ||
                 googleMutation.isPending ||
                 demoMutation.isPending ||
                 localLoginMutation.isPending
               }
               className="w-full"
-              variant="outline"
+              variant="secondary"
             >
-              {localLoginMutation.isPending ? (
+              {demoMutation.isPending ? (
                 <Loader2 className="mr-2 size-4 animate-spin" />
               ) : (
-                <>Login with Email & Password</>
+                <>Continue with Demo Account</>
               )}
             </Button>
-          </div>
-          <Button
-            onClick={handleDemoSignIn}
-            disabled={
-              !isAgreed ||
-              googleMutation.isPending ||
-              demoMutation.isPending ||
-              localLoginMutation.isPending
-            }
-            className="w-full"
-            variant="secondary"
-          >
-            {demoMutation.isPending ? (
-              <Loader2 className="mr-2 size-4 animate-spin" />
-            ) : (
-              <>Continue with Demo Account</>
-            )}
-          </Button>
+          )}
           <div className="flex items-center space-x-2">
             <Checkbox
               id="terms"
