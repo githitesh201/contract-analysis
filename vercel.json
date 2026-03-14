@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "client/next.config.mjs", "use": "@vercel/next" },
+    { "src": "server/api/index.ts", "use": "@vercel/node" }
+  ],
+  "rewrites": [
+    { "source": "/auth/(.*)", "destination": "/server/api/index" },
+    { "source": "/contracts/(.*)", "destination": "/server/api/index" },
+    { "source": "/payments/(.*)", "destination": "/server/api/index" },
+    { "source": "/healthz", "destination": "/server/api/index" }
+  ]
+}

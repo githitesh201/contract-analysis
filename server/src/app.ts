@@ -6,6 +6,8 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 import mongoose from "mongoose";
+import fs from "fs";
+import path from "path";
 import passport from "passport";
 import session from "express-session";
 import MongoStore from "connect-mongo";
@@ -21,6 +23,10 @@ import { handleWebhook } from "./controllers/payment.controller";
 
 const app = express();
 const isProduction = process.env.NODE_ENV === "production";
+const serveClient =
+  process.env.SERVE_CLIENT === "true" ||
+  (isProduction && process.env.SERVE_CLIENT !== "false");
+const shouldListen = process.env.VERCEL !== "1" && process.env.NODE_ENV !== "test";
 const mongoUri = process.env.MONGODB_URI;
 const sessionSecret = process.env.SESSION_SECRET;
 
@@ -72,7 +78,7 @@ const globalRateLimiter = createRateLimiter({
 });
 const authRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
-  max: 25,
+  max: isProduction ? 25 : 200,
   message: "Too many authentication attempts. Try again later.",
 });
 const analyzeRateLimiter = createRateLimiter({
@@ -154,19 +160,79 @@ app.use("/auth", authRateLimiter, authRoute);
 app.use("/contracts", analyzeRateLimiter, contractsRoute);
 app.use("/payments", paymentsRoute);
 
-app.use((error: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error(error);
-  res.status(500).json({ error: "Internal server error" });
-});
+const attachClientRoutes = async () => {
+  if (!serveClient || !shouldListen || process.env.NODE_ENV === "test") {
+    return;
+  }
+
+  const clientDir = path.join(__dirname, "..", "..", "client");
+  const nextModulePath = path.join(clientDir, "node_modules", "next");
+  const nextBuildDir = path.join(clientDir, ".next");
+
+  if (isProduction && !fs.existsSync(nextBuildDir)) {
+    console.warn(
+      "Client build not found. Run the client build before starting the monolith server."
+    );
+    return;
+  }
+
+  let next: any;
+  try {
+    // Resolve Next.js from the client workspace to avoid duplicate installs.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    next = require(nextModulePath);
+  } catch (error) {
+    console.warn(
+      "Next.js dependency not found in the client workspace. Install client dependencies before starting the monolith server."
+    );
+    return;
+  }
+
+  const nextApp = next({ dev: !isProduction, dir: clientDir });
+  const handle = nextApp.getRequestHandler();
+
+  await nextApp.prepare();
+  app.all("*", (req, res) => handle(req, res));
+};
+
+const registerErrorHandler = () => {
+  app.use(
+    (
+      error: Error,
+      _req: express.Request,
+      res: express.Response,
+      _next: express.NextFunction
+    ) => {
+      console.error(error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  );
+};
 
 const PORT = Number(process.env.PORT || 8080);
-const shouldListen = process.env.VERCEL !== "1" && process.env.NODE_ENV !== "test";
 
-if (shouldListen) {
-  app.listen(PORT, () => {
-    console.log(`Server started on port ${PORT}`);
-  });
-}
+const startServer = async () => {
+  await attachClientRoutes();
+  registerErrorHandler();
+
+  if (shouldListen) {
+    const host = process.env.HOST;
+    const logTarget = host ? `${host}:${PORT}` : `port ${PORT}`;
+    if (host) {
+      app.listen(PORT, host, () => {
+        console.log(`Server started on ${logTarget}`);
+      });
+    } else {
+      app.listen(PORT, () => {
+        console.log(`Server started on ${logTarget}`);
+      });
+    }
+  }
+};
+
+startServer().catch((error) => {
+  console.error("Failed to start server", error);
+});
 
 ensureMongoConnection().catch((error) => {
   console.error("Initial MongoDB connection failed", error);
