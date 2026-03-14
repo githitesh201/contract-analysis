@@ -1,12 +1,14 @@
 {
+  "extends": "./client/tsconfig.json",
   "compilerOptions": {
-    "target": "es2016",
-    "module": "commonjs",
-    "esModuleInterop": true,
-    "strict": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "noEmit": true,
+    "incremental": false
   },
-  "include": ["server/**/*.ts"],
-  "exclude": ["client", "node_modules"]
+  "include": [
+    "client/next-env.d.ts",
+    "client/src/**/*.ts",
+    "client/src/**/*.tsx",
+    "client/.next/types/**/*.ts"
+  ],
+  "exclude": ["node_modules", "server"]
 }

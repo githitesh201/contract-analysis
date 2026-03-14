@@ -4,6 +4,12 @@
     { "src": "client/next.config.js", "use": "@vercel/next" },
     { "src": "server/api/index.ts", "use": "@vercel/node" }
   ],
+  "functions": {
+    "server/api/index.ts": {
+      "maxDuration": 60,
+      "excludeFiles": "client/**"
+    }
+  },
   "rewrites": [
     { "source": "/auth/(.*)", "destination": "/server/api/index" },
     { "source": "/contracts/(.*)", "destination": "/server/api/index" },
