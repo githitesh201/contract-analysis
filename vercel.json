@@ -1,7 +1,7 @@
 {
   "version": 2,
   "builds": [
-    { "src": "client/package.json", "use": "@vercel/next" },
+    { "src": "client/next.config.js", "use": "@vercel/next" },
     { "src": "server/api/index.ts", "use": "@vercel/node" }
   ],
   "rewrites": [
