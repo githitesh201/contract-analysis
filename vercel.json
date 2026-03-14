@@ -11,12 +11,10 @@
       }
     }
   ],
-  "routes": [
-    { "handle": "filesystem" },
-    { "src": "/auth/(.*)", "dest": "/server/api/index" },
-    { "src": "/contracts/(.*)", "dest": "/server/api/index" },
-    { "src": "/payments/(.*)", "dest": "/server/api/index" },
-    { "src": "/healthz", "dest": "/server/api/index" },
-    { "src": "/(.*)", "dest": "/client/$1" }
+  "rewrites": [
+    { "source": "/auth/(.*)", "destination": "/server/api/index.ts" },
+    { "source": "/contracts/(.*)", "destination": "/server/api/index.ts" },
+    { "source": "/payments/(.*)", "destination": "/server/api/index.ts" },
+    { "source": "/healthz", "destination": "/server/api/index.ts" }
   ]
 }
