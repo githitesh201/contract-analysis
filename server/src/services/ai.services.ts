@@ -1,4 +1,5 @@
-import { getDocument } from "pdfjs-dist";
+import { getDocument } from "pdfjs-dist/legacy/build/pdf.js";
+import pdfParse from "pdf-parse";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export const AI_MODEL = "gemini-2.5-flash";
@@ -252,6 +253,21 @@ export const extractTextFromPDF = async (fileBuffer: Buffer) => {
       error instanceof Error
         ? `${error.name}: ${error.message}`
         : String(error);
+    try {
+      const parsed = await pdfParse(fileBuffer);
+      if (parsed.text && parsed.text.trim().length > 0) {
+        return parsed.text;
+      }
+    } catch (fallbackError) {
+      const fallbackDetails =
+        fallbackError instanceof Error
+          ? `${fallbackError.name}: ${fallbackError.message}`
+          : String(fallbackError);
+      throw new Error(
+        `Failed to extract text from PDF. Error: ${details}. Fallback failed: ${fallbackDetails}`
+      );
+    }
+
     throw new Error(`Failed to extract text from PDF. Error: ${details}`);
   }
 };
