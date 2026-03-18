@@ -234,7 +234,12 @@ const tryParseJsonFromText = (text: string): Record<string, any> | null => {
 
 export const extractTextFromPDF = async (fileBuffer: Buffer) => {
   try {
-    const pdf = await getDocument({ data: new Uint8Array(fileBuffer) }).promise;
+    const pdf = await getDocument({
+      data: new Uint8Array(fileBuffer),
+      // Serverless environments often fail to spin up a pdf.js worker.
+      // Disabling the worker avoids "Error: {}" failures on Vercel.
+      disableWorker: true,
+    }).promise;
     let text = "";
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
@@ -243,9 +248,11 @@ export const extractTextFromPDF = async (fileBuffer: Buffer) => {
     }
     return text;
   } catch (error) {
-    throw new Error(
-      `Failed to extract text from PDF. Error: ${JSON.stringify(error)}`
-    );
+    const details =
+      error instanceof Error
+        ? `${error.name}: ${error.message}`
+        : String(error);
+    throw new Error(`Failed to extract text from PDF. Error: ${details}`);
   }
 };
 
