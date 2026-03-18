@@ -7,6 +7,9 @@ export const AI_MODEL = "gemini-2.5-flash";
 const getGeminiModel = () => {
   const key = process.env.GEMINI_API_KEY;
   if (!key || key.trim().length < 12 || key.startsWith("local-")) {
+    if (process.env.NODE_ENV === "production") {
+      console.warn("Gemini API key missing/invalid. Using fallback analysis.");
+    }
     return null;
   }
 
@@ -45,7 +48,21 @@ const inferContractTypeFromText = (text: string): string => {
 
 type Tier = "free" | "premium";
 
-const buildFallbackAnalysis = (contractType: string, tier: Tier) => {
+const computeFallbackScore = (seed: string, tier: Tier) => {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = (hash * 31 + seed.charCodeAt(i)) % 100000;
+  }
+  const base = 55 + (hash % 30); // 55-84
+  return tier === "premium" ? Math.min(90, base + 4) : base;
+};
+
+const buildFallbackAnalysis = (
+  contractType: string,
+  tier: Tier,
+  seedText?: string
+) => {
+  const scoreSeed = seedText && seedText.trim().length > 0 ? seedText : contractType;
   const base = {
     risks: [
       {
@@ -110,7 +127,7 @@ const buildFallbackAnalysis = (contractType: string, tier: Tier) => {
       },
     ],
     summary: `This ${contractType} was analyzed in local demo mode. The structure appears usable, but obligations, termination, and liability sections should be reviewed and negotiated before signing.`,
-    overallScore: 67,
+    overallScore: computeFallbackScore(scoreSeed, tier),
   };
 
   if (tier === "free") {
@@ -303,7 +320,7 @@ export const analyzeContractWithAI = async (
   contractType: string
 ) => {
   if (!aiModel) {
-    return buildFallbackAnalysis(contractType, tier);
+    return buildFallbackAnalysis(contractType, tier, contractText);
   }
 
   let prompt;
@@ -352,10 +369,13 @@ export const analyzeContractWithAI = async (
       .trim();
     const parsed = tryParseJsonFromText(text);
     if (!parsed) {
-      return buildFallbackAnalysis(contractType, tier);
+      if (process.env.NODE_ENV === "production") {
+        console.warn("AI response was not JSON. Falling back.");
+      }
+      return buildFallbackAnalysis(contractType, tier, contractText);
     }
     return normalizeAnalysis(parsed, contractType, tier);
   } catch {
-    return buildFallbackAnalysis(contractType, tier);
+    return buildFallbackAnalysis(contractType, tier, contractText);
   }
 };

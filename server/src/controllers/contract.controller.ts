@@ -62,6 +62,12 @@ export const detectAndConfirmContractType = async (
 
   try {
     const pdfText = await extractTextFromPDF(req.file.buffer);
+    if (pdfText.trim().length < 50) {
+      return res.status(422).json({
+        error:
+          "The uploaded PDF has little or no readable text. Try a text-based PDF.",
+      });
+    }
     const detectedType = await detectContractType(pdfText);
 
     res.json({ detectedType });
@@ -94,6 +100,12 @@ export const analyzeContract = async (req: Request, res: Response) => {
 
   try {
     const pdfText = await extractTextFromPDF(req.file.buffer);
+    if (pdfText.trim().length < 50) {
+      return res.status(422).json({
+        error:
+          "The uploaded PDF has little or no readable text. Try a text-based PDF.",
+      });
+    }
     let analysis;
 
     if (user.isPremium) {
