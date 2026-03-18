@@ -67,6 +67,15 @@ export const detectAndConfirmContractType = async (
     res.json({ detectedType });
   } catch (error) {
     console.error(error);
+    const message =
+      error instanceof Error ? error.message : "Failed to detect contract type";
+    if (message.includes("Failed to extract text from PDF")) {
+      res.status(422).json({
+        error:
+          "We couldn't read text from this PDF. Try a different file or a text-based PDF.",
+      });
+      return;
+    }
     res.status(500).json({ error: "Failed to detect contract type" });
   }
 };
@@ -109,6 +118,15 @@ export const analyzeContract = async (req: Request, res: Response) => {
     res.json(savedAnalysis);
   } catch (error) {
     console.error(error);
+    const message =
+      error instanceof Error ? error.message : "Failed to analyze contract";
+    if (message.includes("Failed to extract text from PDF")) {
+      res.status(422).json({
+        error:
+          "We couldn't read text from this PDF. Try a different file or a text-based PDF.",
+      });
+      return;
+    }
     res.status(500).json({ error: "Failed to analyze contract" });
   }
 };

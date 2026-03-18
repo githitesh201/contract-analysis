@@ -319,7 +319,15 @@ export function UploadModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent>{renderContent()}</DialogContent>
+      <DialogContent>
+        <DialogHeader className="sr-only">
+          <DialogTitle>Upload contract</DialogTitle>
+          <DialogDescription>
+            Upload a PDF to detect the contract type and analyze it.
+          </DialogDescription>
+        </DialogHeader>
+        {renderContent()}
+      </DialogContent>
     </Dialog>
   );
 }
